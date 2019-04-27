@@ -2,10 +2,9 @@ import * as express from "express";
 import * as Evt from "evtjs";
 import * as bodyParser from "body-parser";
 import { get } from "lodash";
-import { createDomain, issueToken } from "./chain";
+import { createDomain, issueToken, unlock, addMeta } from "./chain";
 
 console.log(Object.keys(Evt));
-const { EvtKey } = Evt;
 const app = express();
 const privateKey = "5K3P7A16r2sVqXuntj5keU8HEkuWJyA2ZdD3mYdvuFVGmkCgTH4";
 const publicKey = "EVT7VVeoJ8h2CtFqR1UBo4H3vbJUuWKrNrqa2LHKerUn27d1sbQNh";
@@ -44,11 +43,11 @@ const createSuccess = <T>(data: T): { success: true; data: T } => ({
 type Body = {
   type?: string;
   state?: "unlock" | "register";
-  session?: string;
+  data?: string;
 };
 
 const mergeWithDefaultBody = (payload: Body): Body => ({
-  session: null,
+  data: null,
   ...payload
 });
 
@@ -67,6 +66,12 @@ const validateBody = (body: Body) => {
   };
 };
 
+app.get("/v1/transaction/:id", async (req, res) => {
+  const api = getApiCaller();
+  const trx = await api.getTransactionDetailById(req.params.id);
+  res.json(trx);
+});
+
 app.post("/v1/locks/:id", async (req, res) => {
   const { body, params } = req;
 
@@ -78,7 +83,7 @@ app.post("/v1/locks/:id", async (req, res) => {
     return;
   }
 
-  const { type: domain, session, state } = validated.data;
+  const { type: domain, data, state } = validated.data;
   const api = getApiCaller();
 
   if (state === "register") {
@@ -137,6 +142,30 @@ app.post("/v1/locks/:id", async (req, res) => {
 
       return;
     }
+
+    const unlockTrx = await unlock(api, domain, params.id, [privateKey]);
+
+    let dataTrx = null;
+
+    if (data) {
+      dataTrx = await addMeta(
+        api,
+        domain,
+        params.id,
+        String(Date.now()),
+        data,
+        publicKey
+      );
+      console.log(dataTrx);
+    }
+
+    res.json(
+      createSuccess(
+        [{ name: "unlock", trxId: unlockTrx.transactionId }].concat(
+          dataTrx ? [{ name: "data", trxId: dataTrx.transactionId }] : []
+        )
+      )
+    );
   }
 
   return;

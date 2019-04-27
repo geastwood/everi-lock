@@ -58,3 +58,46 @@ export const issueToken = async (
     })
   );
 };
+
+export const unlock = async (
+  api: any,
+  domain: string,
+  name: string,
+  keyProvider: any[]
+) => {
+  const { EvtLink } = Evt;
+
+  let link = await EvtLink.getEvtLinkForEveriPass({
+    autoDestroying: false,
+    domainName: domain,
+    tokenName: name,
+    keyProvider,
+    linkId: await EvtLink.getUniqueLinkId()
+  });
+
+  return api.pushTransaction(
+    { maxCharge: 1000000 },
+    new Evt.EvtAction("everipass", {
+      link: link.rawText
+    })
+  );
+};
+
+export const addMeta = async (
+  api: any,
+  domain: string,
+  name: string,
+  metaKey: string,
+  metaValue: string,
+  publicKey: string
+) => {
+  return api.pushTransaction(
+    { maxCharge: 1000000, payer: publicKey },
+    new Evt.EvtAction(
+      "addmeta",
+      { key: metaKey, value: metaValue, creator: `[A] ${publicKey}` },
+      domain,
+      name
+    )
+  );
+};
